@@ -2,94 +2,99 @@ import socket
 import threading
 
 
+# escucha conexiones desde docker y desde la computadora
 HOST = "0.0.0.0"
 PORT = 5000
-
+# guarda las conexiones activas con el nombre de cada cliente
 clientes = {}
+# protege la lista de clientes cuando trabajan varios hilos
 candado = threading.Lock()
-servidor = None
+# coordina los mensajes que se muestran en la terminal
+terminal = threading.Lock()
+# indica si el servidor esta esperando que escriban un mensaje
+esperando_entrada = False
 
 
-def enviar_a_todos(mensaje, emisor=None):
-    # envia un mensaje a todos los clientes conectados
+def mostrar(mensaje):
+    # separa cada mensaje del prompt del servidor
+    global esperando_entrada
+    with terminal:
+        if esperando_entrada:
+            # deja el mensaje en una linea y vuelve a mostrar el prompt
+            print(f"\n{mensaje}\n[SERVIDOR]: ", end="", flush=True)
+        else:
+            print(mensaje, flush=True)
+
+
+def enviar(mensaje, emisor=None):
+    # envia el mensaje a los clientes conectados
     with candado:
-        for conexion in list(clientes):
-            if conexion == emisor:
-                continue
-            try:
-                conexion.sendall((mensaje + "\n").encode("utf-8"))
-            except OSError:
-                pass
+        for cliente in clientes:
+            if cliente != emisor:
+                try:
+                    cliente.sendall((mensaje + "\n").encode("utf-8"))
+                except OSError:
+                    pass
 
 
-def atender_cliente(conexion):
-    # recibe mensajes de un cliente y los comparte con los demas
+def atender(conexion):
+    # lee el nombre que el cliente envia al conectarse
     canal = conexion.makefile("r", encoding="utf-8")
     nombre = canal.readline().strip()
-
     with candado:
-        nombre_en_uso = nombre in clientes.values()
-        nombre_valido = nombre in ("CLIENTE 1", "CLIENTE 2")
-        if nombre_valido and not nombre_en_uso:
-            clientes[conexion] = nombre
+        clientes[conexion] = nombre
 
-    if not nombre_valido or nombre_en_uso:
-        conexion.sendall(
-            "[SERVIDOR]: El nombre no es valido o ya esta conectado\n".encode("utf-8")
-        )
-        canal.close()
-        conexion.close()
-        return
-
+    # recibe mensajes hasta que el cliente se desconecta
     for linea in canal:
         mensaje = linea.strip()
-        if not mensaje:
-            continue
         if mensaje.lower() == "/salir":
             break
+        if mensaje:
+            # agrega el nombre del cliente antes de compartir el mensaje
+            texto = f"[{nombre}]: {mensaje}"
+            mostrar(texto)
+            enviar(texto, conexion)
 
-        texto = f"[{nombre}]: {mensaje}"
-        print(texto, flush=True)
-        enviar_a_todos(texto, emisor=conexion)
-
+    # cierra la conexion y quita al cliente de la lista
     canal.close()
     conexion.close()
-
     with candado:
         clientes.pop(conexion, None)
 
-def aceptar_clientes():
-    # acepta conexiones y crea un hilo para cada cliente
+
+def aceptar():
+    # atiende cada cliente en un hilo separado
     while True:
         try:
             conexion, _ = servidor.accept()
         except OSError:
             break
-
-        hilo = threading.Thread(
-            target=atender_cliente,
-            args=(conexion,),
-            daemon=True,
-        )
-        hilo.start()
+        threading.Thread(target=atender, args=(conexion,), daemon=True).start()
 
 
 def main():
-    global servidor
-
+    # configura el socket del servidor
+    global servidor, esperando_entrada
     servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     servidor.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     servidor.bind((HOST, PORT))
     servidor.listen()
-
     print(f"[SERVIDOR]: Escuchando en {HOST}:{PORT}", flush=True)
-    threading.Thread(target=aceptar_clientes, daemon=True).start()
+    # acepta clientes mientras la terminal permite enviar mensajes
+    threading.Thread(target=aceptar, daemon=True).start()
 
     try:
         while True:
-            mensaje = input("[SERVIDOR]: ")
+            # muestra el prompt y lee un mensaje escrito desde docker compose
+            with terminal:
+                esperando_entrada = True
+                print("[SERVIDOR]: ", end="", flush=True)
+            mensaje = input()
+            with terminal:
+                esperando_entrada = False
             if mensaje.strip():
-                enviar_a_todos(f"[SERVIDOR]: {mensaje}")
+                # comparte el mensaje del servidor con los clientes
+                enviar(f"[SERVIDOR]: {mensaje}")
     except (EOFError, KeyboardInterrupt):
         print("\n[SERVIDOR]: Cerrando el chat", flush=True)
     finally:

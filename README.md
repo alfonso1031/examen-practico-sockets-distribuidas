@@ -18,16 +18,21 @@ Abre una terminal de VS Code en esta carpeta y ejecuta:
 docker compose up --build -d
 ```
 
-El servidor queda escuchando en el puerto `5000`. Para escribir desde el
-servidor, abre otra terminal de VS Code en esta carpeta y adjúntate al servicio:
+El servidor queda escuchando en el puerto `5000` en segundo plano. Para escribir
+desde el servidor, abre otra terminal de VS Code en esta carpeta y adjúntate al
+servicio:
 
 ```powershell
 docker compose attach servidor
 ```
 
-Dale a ENTER primero, y cuando aparezca el prompt `[SERVIDOR]:`, escribe el mensaje y presiona Enter de nuevo para enviarlo.
-Los mensajes que escriban los clientes también aparecerán en esa terminal.
-Presiona `Ctrl+C` desde la terminal adjunta para detener el servidor.
+En la terminal adjunta escribe junto al prompt `[SERVIDOR]:`; el texto se ve
+mientras escribes. Usa solo esta terminal interactiva para escribir mensajes.
+Enter vacío no envía ningún mensaje y deja listo el siguiente prompt. Los
+mensajes de los clientes también aparecerán con sus etiquetas en esa terminal.
+Si llega un mensaje mientras escribes, aparecerá en otra línea y se mostrará de
+nuevo el prompt del servidor.
+Para detener el servidor, ejecuta `docker compose down` en otra terminal.
 
 ## Conectar los dos clientes
 
@@ -43,7 +48,7 @@ python cliente2.py
 ```
 
 Cada archivo se identifica ante el servidor como `CLIENTE 1` o `CLIENTE 2`, sin
-importar cuál se conecte primero. Escribe un mensaje y presiona Enter; el otro
-cliente lo recibe y el servidor lo muestra en su terminal. El mensaje no se
-reenvía al cliente que lo escribió para evitar que aparezca duplicado. Para
-salir de un cliente, escribe `/salir`.
+importar cuál se conecte primero. El prompt de cada terminal muestra su nombre.
+Los Enter vacíos se ignoran. El otro cliente recibe cada mensaje y el servidor
+lo muestra en su terminal. El emisor ya ve su mensaje en su propio terminal, así
+que el servidor no se lo reenvía. Para salir de un cliente, escribe `/salir`.

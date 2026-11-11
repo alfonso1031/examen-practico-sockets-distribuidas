@@ -1,7 +1,9 @@
 services:
   servidor:
     build: .
+    # publica el puerto del contenedor en el mismo puerto de la computadora
     ports:
       - "5000:5000"
+    # mantiene abierta la entrada y crea una terminal para escribir mensajes
     stdin_open: true
     tty: true
